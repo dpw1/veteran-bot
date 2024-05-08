@@ -1,0 +1,19 @@
+Dear {name} team,
+
+I noticed that you're using the {theme} theme. My name is Diego, I'm a certified Shopify Partner and the top #10 most active member in the official Shopify Forum. ( my profile: https://bit.ly/33qG04p )
+
+I make code snippets for Shopify themes that can replace apps, just by copy/pasting into any theme. They load faster than any apps and also last for life (no subscriptions).
+
+Some of them work particularly well with the {theme} theme, like this one that adds arrows/swiping to the product page's lightbox zoomed images:
+
+bit.ly/3JW2OIl
+
+If you'd like to this or anything else free of charge, let me know. You can reach out to me via email or the Shopify Forum. No String attached.
+
+Friendly reminder: this is not an automated message (the website is captcha protected), you won't be hearing from me again.
+
+Thank you very much, I appreciate your time and your patience.
+
+Kind regards,
+Diego
+
