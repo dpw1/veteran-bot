@@ -5,7 +5,7 @@ const { Timer } = require("timer-node");
 
 const DELAY_BETWEEN_WEBSITES = 50;
 
-const { getWebsites, getJobs } = require("./utils");
+const { getWebsites, getJobs, saveToDatabase } = require("./utils");
 
 const timer = new Timer({ label: "timer" });
 
@@ -23,7 +23,6 @@ let emailTotal = 0;
     deviceCategory: "desktop",
   });
   const userAgentStr = userAgent.toString();
-  console.log(`User Agent: ${userAgentStr}`);
 
   const anonymizeUserAgentPlugin =
     require("puppeteer-extra-plugin-anonymize-ua")({
@@ -68,22 +67,24 @@ let emailTotal = 0;
   timer.start();
 
   for (const [index, each] of list.entries()) {
-    console.log(`\n\n ${index + 1}. ${each.website}`);
+    console.log(`\n\n${index + 1}. ${each.website}\n`);
 
     const page = await browser.newPage();
     const agent = userAgent.toString();
     await page.setUserAgent(agent);
 
-    console.log("agent", agent);
-
     await page.goto(each.website);
     const websites = await getJobs(page, each.CSS);
 
-    console.log("result", websites);
+    console.log(`Extracted ${websites.length} job(s).`);
+
+    await saveToDatabase(websites);
+
     await page.close();
   }
 
   process.on("exit", function () {
+    console.log("Completed!");
     // timer.stop();
     // console.log("Total time: ", timer.format());
     // console.log(`${emailsSent} / ${emailTotal} emails`);
