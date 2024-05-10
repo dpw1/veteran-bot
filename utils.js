@@ -34,27 +34,38 @@ For the CSS selectors:
 jobs = parent of the div containing all jobs. Example: #jobs
 jobsItem = each individual job. The parent must be re-declared here. Example: #jobs .job-item
 jobsTitle = each individual title without the parent. It  will be used in a loop. Example: .job-title
+paginationNextButton = pagination button to go to next page
 */
 async function getWebsites() {
   return new Promise(async (resolve, reject) => {
     const websites = [
       {
-        website: `https://dawsonohana.hrmdirect.com/employment/job-openings.php?search=true&dept=-1&city=-1&state=-1&cust_sort1=199216`,
+        website: `https://jimaletechnicalservices.applytojob.com/apply/jobs/`,
         CSS: {
-          jobs: `.reqResultTable`,
-          jobsItem: `.reqResultTable tr`,
-          jobsTitle: `a`,
-          pagination: ``,
+          jobs: `#jobs_table`,
+          jobsItem: `#jobs_table tr[id]`,
+          jobsTitle: `.job_title_link`,
           paginationNextButton: ``,
         },
       },
+      // {
+      //   website: `https://careers.magellanhealth.com/us/en/search-results`,
+      //   CSS: {
+      //     jobs: `[data-ph-at-id="jobs-list"]`,
+      //     jobsItem: `[data-ph-at-id="jobs-list"] > li`,
+      //     jobsTitle: `.job-title`,
+
+      //     paginationNextButton: `[data-ph-at-id="pagination-next-link"]`,
+      //   },
+      // },
+
       {
         website: `https://careers.bwfed.com/jobs`,
         CSS: {
           jobs: `.job-results-container > * > *`,
           jobsItem: `.job-results-container > * > * mat-expansion-panel-header > span:nth-child(1)`,
           jobsTitle: `[itemprop="title"]`,
-          pagination: ``,
+
           paginationNextButton: `button.mat-paginator-navigation-next:not([disabled])`,
         },
       },
@@ -64,7 +75,7 @@ async function getWebsites() {
           jobs: `#job_results`,
           jobsItem: `#job_results > *`,
           jobsTitle: `.job-name`,
-          pagination: ``,
+
           paginationNextButton: ``,
         },
       },
@@ -88,6 +99,7 @@ returns the following array of objects:
 ]
 */
 async function getJobs(page, CSSSelectors) {
+  console.log(`Scraping... `);
   return new Promise(async (resolve, reject) => {
     const response = await page.evaluate((CSSSelectors) => {
       return new Promise(async (resolve, reject) => {
@@ -152,8 +164,9 @@ async function getJobs(page, CSSSelectors) {
 
           if (!$found) {
             alert(
-              "error - no jobs selector found. Maybe this site was updated",
+              "error - no jobs selector found. Maybe this site was updated or the selector is wrong.",
             );
+            return;
           }
 
           for (var i = 0; i <= pages; i++) {
@@ -183,15 +196,14 @@ async function getJobs(page, CSSSelectors) {
               });
             }
 
-            debugger;
             var $nextPage =
               CSSSelectors.paginationNextButton &&
               CSSSelectors.paginationNextButton.length >= 1 &&
               document.querySelector(CSSSelectors.paginationNextButton);
 
             if ($nextPage) {
+              console.log(`Going to page number ${pages + 2}`);
               $nextPage.click();
-
               await sleep(2500);
               pages += 1;
             } else {

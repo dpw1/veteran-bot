@@ -67,13 +67,17 @@ let emailTotal = 0;
   timer.start();
 
   for (const [index, each] of list.entries()) {
-    console.log(`\n\n${index + 1}. ${each.website}\n`);
+    console.log(`\n\n${index + 1}/${list.length}. ${each.website}\n`);
 
     const page = await browser.newPage();
     const agent = userAgent.toString();
     await page.setUserAgent(agent);
 
-    await page.goto(each.website);
+    await page.goto(each.website, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
+
     const websites = await getJobs(page, each.CSS);
 
     console.log(`Extracted ${websites.length} job(s).`);
