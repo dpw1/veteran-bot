@@ -4,8 +4,18 @@ const UserAgent = require("user-agents");
 const { Timer } = require("timer-node");
 
 const DELAY_BETWEEN_WEBSITES = 50;
+global.SCRAPED_DATA = [];
 
-const { getWebsites, getJobs, saveToDatabase } = require("./utils");
+const {
+  saveToDatabase,
+  getCompanyNamesFromCSVFile,
+  goToJobsPage,
+  searchForCompany,
+  setFilter,
+  createURLAsLocalStorage,
+  extractResultsFromCompanyPage,
+  sleep,
+} = require("./utils");
 
 const timer = new Timer({ label: "timer" });
 
@@ -14,12 +24,11 @@ let emailSuccess = 0;
 let emailTotal = 0;
 
 (async () => {
-  const list = await getWebsites();
+  const list = await getCompanyNamesFromCSVFile();
 
   puppeteer.use(StealthPlugin());
 
   const userAgent = new UserAgent({
-    platform: "MacIntel",
     deviceCategory: "desktop",
   });
   const userAgentStr = userAgent.toString();
@@ -64,25 +73,63 @@ let emailTotal = 0;
     ],
   });
 
-  timer.start();
+  let page = await browser.newPage();
+  const agent = userAgent.toString();
+  await page.setUserAgent(agent);
+
+  await goToJobsPage(page);
+
+  await page.waitForNavigation();
+
+  const urls = await createURLAsLocalStorage(page);
 
   for (const [index, each] of list.entries()) {
-    console.log(`\n\n${index + 1}/${list.length}. ${each.website}\n`);
+    let url = urls.urlPast24Hours.replace(
+      `replacecompanyhere`,
+      each.trim().replace(` `, `%20`),
+    );
 
-    const page = await browser.newPage();
-    const agent = userAgent.toString();
-    await page.setUserAgent(agent);
-
-    await page.goto(each.website, {
+    await page.goto(url, {
       waitUntil: "networkidle0",
       timeout: 60000,
     });
 
-    const websites = await getJobs(page, each.CSS);
+    const results24Hours = await extractResultsFromCompanyPage(page, each);
 
-    console.log(`Extracted ${websites.length} job(s).`);
+    console.log(results24Hours);
 
-    await saveToDatabase(websites);
+    if (results24Hours === null) {
+      console.log("No results found during past 24 hours.");
+
+      await page.close();
+
+      const page2 = await browser.newPage();
+
+      await goToJobsPage(page2);
+
+      await page2.waitForNavigation();
+
+      url = urls.urlPastWeek.replace(
+        `replacecompanyhere`,
+        each.trim().replace(` `, `%20`),
+      );
+
+      console.log("new page: ", url);
+
+      await sleep(2000);
+
+      await page2.goto(url, {
+        waitUntil: "networkidle0",
+        timeout: 60000,
+      });
+
+      /* Todo 
+      
+      */
+    } else {
+      global.SCRAPED_DATA.push(...results24Hours);
+    }
+    console.log(global.SCRAPED_DATA);
 
     await page.close();
   }

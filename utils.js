@@ -6,7 +6,35 @@ const userAgent = require("user-agents");
 const copySync = require("fs-extra/lib/copy/copy-sync");
 const Database = require("easy-json-database");
 
+const csv = require("csv-parser");
+
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const linkedinCSSSelectors = {
+  searchForCompanyInput: `input[aria-controls*='job-search-bar'][aria-label*='Search']`,
+  jobsButton: `a[href*='nav_menu_jobs']`,
+  dateFilterButton: `button[aria-label*="Date posted"]`,
+  dateFilterButtonRadioButtons: `[class*='filter-values'][aria-label*="Date posted"] > *`,
+  dateFilterSubmitButton: `[aria-label*="Date posted"] + * .filter__submit-button`,
+};
+
+function getCompanyNamesFromCSVFile(csvFilePath = `./company_urls.csv`) {
+  return new Promise((resolve, reject) => {
+    const results = [];
+
+    fs.createReadStream(csvFilePath)
+      .pipe(csv())
+      .on("data", (data) => {
+        results.push(data.company);
+      })
+      .on("end", () => {
+        resolve(results);
+      })
+      .on("error", (error) => {
+        reject(error);
+      });
+  });
+}
 
 async function geminiQuestion(
   prompt = "Write a story about a magic backpack.",
@@ -27,203 +55,192 @@ async function geminiQuestion(
   });
 }
 
-/*
+/* Generates URL to search for company with included filter.
 
-For the CSS selectors:
+The filter for past 24 hours has an ID. 
 
-jobs = parent of the div containing all jobs. Example: #jobs
-jobsItem = each individual job. The parent must be re-declared here. Example: #jobs .job-item
-jobsTitle = each individual title without the parent. It  will be used in a loop. Example: .job-title
-paginationNextButton = pagination button to go to next page
 */
-async function getWebsites() {
+async function createURLAsLocalStorage(page) {
+  console.log("Creating local storage URLs.");
   return new Promise(async (resolve, reject) => {
-    const websites = [
-      {
-        website: `https://jimaletechnicalservices.applytojob.com/apply/jobs/`,
-        CSS: {
-          jobs: `#jobs_table`,
-          jobsItem: `#jobs_table tr[id]`,
-          jobsTitle: `.job_title_link`,
-          paginationNextButton: ``,
-        },
+    const response = await page.evaluate(
+      (linkedinCSSSelectors = linkedinCSSSelectors) => {
+        return new Promise(async (resolve, reject) => {
+          const $id = document.querySelector(`[name="geoId"]`);
+
+          if (!$id) {
+            alert(`Error: no geoid found`);
+          }
+
+          const $filterPastWeek = document.querySelector(
+            `[aria-label*="Date posted"] > [class*='filter-values']:nth-child(3)`,
+          );
+          const $filterPast24Hours = document.querySelector(
+            `[aria-label*="Date posted"] > [class*='filter-values']:nth-child(4)`,
+          );
+
+          const id = $id.getAttribute(`value`);
+          const past24HoursID = $filterPast24Hours
+            .querySelector(`input`)
+            .getAttribute("value");
+          const pastWeekFilter = $filterPastWeek
+            .querySelector(`input`)
+            .getAttribute("value");
+
+          const urlPast24Hours = `https://www.linkedin.com/jobs/search?keywords=replacecompanyhere&location=United%20States&geoId=${id}8&f_TPR=${past24HoursID}&position=1&pageNum=0`;
+          const urlPastWeek = `https://www.linkedin.com/jobs/search?keywords=replacecompanyhere&location=United%20States&geoId=${id}8&f_TPR=${pastWeekFilter}&position=1&pageNum=0`;
+
+          localStorage.setItem(`past_24_hours_url`, urlPast24Hours);
+          localStorage.setItem(`past_week_url`, urlPastWeek);
+
+          resolve({ urlPast24Hours, urlPastWeek });
+        });
       },
-      // {
-      //   website: `https://careers.magellanhealth.com/us/en/search-results`,
-      //   CSS: {
-      //     jobs: `[data-ph-at-id="jobs-list"]`,
-      //     jobsItem: `[data-ph-at-id="jobs-list"] > li`,
-      //     jobsTitle: `.job-title`,
-
-      //     paginationNextButton: `[data-ph-at-id="pagination-next-link"]`,
-      //   },
-      // },
-
-      {
-        website: `https://careers.bwfed.com/jobs`,
-        CSS: {
-          jobs: `.job-results-container > * > *`,
-          jobsItem: `.job-results-container > * > * mat-expansion-panel-header > span:nth-child(1)`,
-          jobsTitle: `[itemprop="title"]`,
-
-          paginationNextButton: `button.mat-paginator-navigation-next:not([disabled])`,
-        },
-      },
-      {
-        website: `https://sempervalens.isolvedhire.com/jobs/`,
-        CSS: {
-          jobs: `#job_results`,
-          jobsItem: `#job_results > *`,
-          jobsTitle: `.job-name`,
-
-          paginationNextButton: ``,
-        },
-      },
-
-      // ``,
-    ];
-
-    resolve(websites);
-  });
-}
-
-/* Scrapes all jobs from a given website. 
-
-returns the following array of objects:
-
-[
-  {
-    title: "" // string, job title
-    url: "" // string, job url
-  }
-]
-*/
-async function getJobs(page, CSSSelectors) {
-  console.log(`Scraping... `);
-  return new Promise(async (resolve, reject) => {
-    const response = await page.evaluate((CSSSelectors) => {
-      return new Promise(async (resolve, reject) => {
-        /* Helper functions */
-
-        function sleep(ms) {
-          return new Promise((resolve) => setTimeout(resolve, ms));
-        }
-        function waitForElement(selector, delay = 50, tries = 100) {
-          const element = document.querySelector(selector);
-
-          if (!window[`__${selector}`]) {
-            window[`__${selector}`] = 0;
-            window[`__${selector}__delay`] = delay;
-            window[`__${selector}__tries`] = tries;
-          }
-
-          function _search() {
-            return new Promise((resolve) => {
-              window[`__${selector}`]++;
-              setTimeout(resolve, window[`__${selector}__delay`]);
-            });
-          }
-
-          if (element === null) {
-            if (window[`__${selector}`] >= window[`__${selector}__tries`]) {
-              window[`__${selector}`] = 0;
-              return Promise.resolve(null);
-            }
-
-            return _search().then(() => waitForElement(selector));
-          } else {
-            return Promise.resolve(element);
-          }
-        }
-
-        function getCurrentDateTime() {
-          const now = new Date();
-
-          const month = (now.getMonth() + 1).toString().padStart(2, "0");
-          const day = now.getDate().toString().padStart(2, "0");
-          const year = now.getFullYear();
-
-          let hours = now.getHours();
-          const amPM = hours >= 12 ? "PM" : "AM";
-          hours = hours % 12;
-          hours = hours ? hours : 12; // 12-hour clock format
-          const minutes = now.getMinutes().toString().padStart(2, "0");
-          const seconds = now.getSeconds().toString().padStart(2, "0");
-
-          return `${month}-${day}-${year}, ${hours}:${minutes}:${seconds} ${amPM}`;
-        }
-
-        /* Code starts here 
-        ======================= */
-
-        try {
-          let found = [];
-          let pages = 1;
-
-          const $found = await waitForElement(CSSSelectors.jobs);
-
-          if (!$found) {
-            alert(
-              "error - no jobs selector found. Maybe this site was updated or the selector is wrong.",
-            );
-            return;
-          }
-
-          for (var i = 0; i <= pages; i++) {
-            debugger;
-            var $items = $found.querySelectorAll(CSSSelectors.jobsItem);
-
-            for (var each of $items) {
-              var $title = each.querySelector(CSSSelectors.jobsTitle);
-
-              if (!$title) {
-                throw new Error(`No title found`);
-              }
-              var $url = each.querySelector(`a[href]`);
-
-              if (!$url) {
-                throw new Error(`No title found`);
-              }
-
-              var title = $title.textContent;
-              var url = $url.href;
-              var extractionDate = getCurrentDateTime();
-
-              found.push({
-                title,
-                url,
-                extractionDate,
-              });
-            }
-
-            var $nextPage =
-              CSSSelectors.paginationNextButton &&
-              CSSSelectors.paginationNextButton.length >= 1 &&
-              document.querySelector(CSSSelectors.paginationNextButton);
-
-            if ($nextPage) {
-              console.log(`Going to page number ${pages + 2}`);
-              $nextPage.click();
-              await sleep(2500);
-              pages += 1;
-            } else {
-              resolve(found);
-              return;
-            }
-          }
-
-          resolve(found);
-        } catch (err) {
-          console.error(err);
-          alert("error (check console)");
-          resolve(false);
-        }
-      });
-    }, CSSSelectors);
+      linkedinCSSSelectors,
+    );
 
     resolve(response);
   });
 }
+
+function sleep(time) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, time);
+  });
+}
+
+async function cleanCompanyName(list) {
+  return new Promise(async (resolve, reject) => {});
+}
+
+async function goToJobsPage(page) {
+  return new Promise(async (resolve, reject) => {
+    await page.goto(`https://linkedin.com/`, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
+
+    const response = await page.evaluate(
+      (linkedinCSSSelectors = linkedinCSSSelectors) => {
+        return new Promise(async (resolve, reject) => {
+          const $job = document.querySelector(linkedinCSSSelectors.jobsButton);
+
+          if (!$job) {
+            alert("no job button found");
+            throw new Error("no job button found");
+          }
+
+          $job.click();
+          resolve();
+        });
+      },
+      linkedinCSSSelectors,
+    );
+
+    resolve(response);
+  });
+}
+
+async function setFilter(page) {
+  console.log(`Setting filter..`);
+  return new Promise(async (resolve, reject) => {
+    const variables = { ...linkedinCSSSelectors };
+
+    const response = await page.evaluate((variables = variables) => {
+      return new Promise(async (resolve, reject) => {
+        function getRandomInteger(min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function sleep(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        var found24Hours = false;
+        var $el = document.querySelector(variables.dateFilterButton);
+
+        if (!$el) {
+          alert(`Error: unable to find date filter button`);
+        }
+
+        var $filters = document.querySelectorAll(
+          variables.dateFilterButtonRadioButtons,
+        );
+
+        if (!$filters) {
+          alert(`Error: unable to find date filter options.`);
+        }
+
+        $el.click();
+        await sleep(getRandomInteger(200, 400));
+
+        for (var each of $filters) {
+          var text = each.textContent.toLowerCase().trim();
+          var $found = each.querySelector(`input`);
+
+          if (text.includes("24 hours")) {
+            $found.checked = true;
+            break;
+          } else if (text.includes("past week")) {
+            $found.checked = true;
+          }
+        }
+
+        await sleep(getRandomInteger(1500, 2000));
+
+        const $submit = document.querySelector(
+          variables.dateFilterSubmitButton,
+        );
+
+        if (!$submit) {
+          alert(`Error: submit button for the date filter not found.`);
+          throw new Error(
+            `Error: submit button for the date filter not found.`,
+          );
+        }
+
+        $submit.click();
+
+        resolve();
+      });
+    }, variables);
+
+    resolve(response);
+  });
+}
+
+async function searchForCompany(page, company) {
+  console.log(`Searching for ${company}...`);
+  return new Promise(async (resolve, reject) => {
+    const variables = { ...linkedinCSSSelectors, company };
+
+    const response = await page.evaluate((variables = variables) => {
+      return new Promise(async (resolve, reject) => {
+        // const $search = document.querySelector(variables.searchForCompanyInput);
+
+        // if (!$search) {
+        //   alert(`Error: no search input found.`);
+        //   throw new Error(`Error: no search input found.`);
+        // }
+
+        // $search.value = variables.company;
+        // const $form = $search.closest(`form`);
+
+        // if (!$form) {
+        //   alert(`Error: no form found.`);
+        //   throw new Error(`Error: no form found.`);
+        // }
+
+        // $form.submit();
+        resolve();
+      });
+    }, variables);
+
+    resolve(response);
+  });
+}
+
+async function resetPageIfSearchIsBlocked() {}
 
 async function saveToDatabase(data = null) {
   return new Promise(async (resolve, reject) => {
@@ -277,11 +294,65 @@ function replaceAll(word, obj) {
   return finalString;
 }
 
+function extractResultsFromCompanyPage(page, company) {
+  console.log(`Searching past 24h...`);
+
+  return new Promise(async (resolve, reject) => {
+    const variables = { ...linkedinCSSSelectors, company };
+
+    const response = await page.evaluate((variables = variables) => {
+      return new Promise(async (resolve, reject) => {
+        const $404 = document.querySelector(
+          `[class*='no-results'][class*='title']`,
+        );
+
+        if ($404) {
+          resolve(null);
+          return;
+        }
+
+        window.results = [];
+        const $jobs = document.querySelectorAll(
+          `.jobs-search__results-list > li`,
+        );
+
+        for (var each of $jobs) {
+          const $title = each.querySelector(`.base-search-card__title`);
+          const $location = each.querySelector(`.job-search-card__location`);
+          const $date = each.querySelector(
+            `[class*='job-search-card__listdate']`,
+          );
+
+          const title = $title.textContent.trim();
+          const location = $location.textContent.trim();
+          const date = $date.textContent.trim();
+
+          window.results.push({
+            title,
+            location,
+            date,
+            company: variables.company,
+          });
+        }
+
+        resolve(window.results);
+      });
+    }, variables);
+
+    resolve(response);
+  });
+}
+
 module.exports = {
   replaceAll: replaceAll,
-  getWebsites: getWebsites,
+  searchForCompany: searchForCompany,
   capitalize: capitalize,
   saveToDatabase: saveToDatabase,
   geminiQuestion: geminiQuestion,
-  getJobs: getJobs,
+  getCompanyNamesFromCSVFile: getCompanyNamesFromCSVFile,
+  goToJobsPage: goToJobsPage,
+  setFilter: setFilter,
+  createURLAsLocalStorage: createURLAsLocalStorage,
+  sleep: sleep,
+  extractResultsFromCompanyPage: extractResultsFromCompanyPage,
 };
