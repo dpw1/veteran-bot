@@ -3,18 +3,20 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const UserAgent = require("user-agents");
 const { Timer } = require("timer-node");
 
-const DELAY_BETWEEN_WEBSITES = 50;
-global.SCRAPED_DATA = [];
+const DELAY_BETWEEN_24HOURS_AND_PAST_WEEK_FILTERS = [2000, 2300];
+const DELAY_BETWEEN_STEPS = [100, 120];
 
 const {
   saveToDatabase,
   getCompanyNamesFromCSVFile,
   goToJobsPage,
-  searchForCompany,
-  setFilter,
+
   createURLAsLocalStorage,
   extractResultsFromCompanyPage,
   sleep,
+  getRandomInt,
+  exportAsExcelSheet,
+  addPropertyToAllItems,
 } = require("./utils");
 
 const timer = new Timer({ label: "timer" });
@@ -83,55 +85,83 @@ let emailTotal = 0;
 
   const urls = await createURLAsLocalStorage(page);
 
+  let total24HoursResults = [];
+  let totalPastWeekResults = [];
+
   for (const [index, each] of list.entries()) {
     let url = urls.urlPast24Hours.replace(
       `replacecompanyhere`,
-      each.trim().replace(` `, `%20`),
+      each.company.trim().replace(` `, `%20`),
     );
 
-    await page.goto(url, {
+    var context = await browser.createIncognitoBrowserContext();
+    const incognito1 = await context.newPage();
+    await incognito1.goto(url, {
       waitUntil: "networkidle0",
       timeout: 60000,
     });
 
-    const results24Hours = await extractResultsFromCompanyPage(page, each);
+    await sleep(getRandomInt(DELAY_BETWEEN_STEPS));
 
-    console.log(results24Hours);
+    var results24Hours = await extractResultsFromCompanyPage(
+      incognito1,
+      each.company,
+    );
 
-    if (results24Hours === null) {
-      console.log("No results found during past 24 hours.");
+    results24Hours = addPropertyToAllItems(
+      [...results24Hours],
+      "url",
+      each.URL,
+    );
 
-      await page.close();
+    await sleep(getRandomInt(DELAY_BETWEEN_STEPS));
 
-      const page2 = await browser.newPage();
+    console.log(
+      `${each.company} - extracted ${results24Hours.length} jobs for the past 24 hours.`,
+    );
 
-      await goToJobsPage(page2);
+    await incognito1.close();
+    await sleep(getRandomInt(DELAY_BETWEEN_24HOURS_AND_PAST_WEEK_FILTERS));
 
-      await page2.waitForNavigation();
+    var context = await browser.createIncognitoBrowserContext();
+    const incognito2 = await context.newPage();
 
-      url = urls.urlPastWeek.replace(
-        `replacecompanyhere`,
-        each.trim().replace(` `, `%20`),
-      );
+    url = urls.urlPastWeek.replace(
+      `replacecompanyhere`,
+      each.company.trim().replace(` `, `%20`),
+    );
+    await sleep(getRandomInt(DELAY_BETWEEN_STEPS));
+    await incognito2.goto(url, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
 
-      console.log("new page: ", url);
+    await sleep(getRandomInt(DELAY_BETWEEN_STEPS));
 
-      await sleep(2000);
+    var resultsPastWeek = await extractResultsFromCompanyPage(
+      incognito2,
+      each.company,
+    );
 
-      await page2.goto(url, {
-        waitUntil: "networkidle0",
-        timeout: 60000,
-      });
+    resultsPastWeek = addPropertyToAllItems(
+      [...resultsPastWeek].filter((e) => !e.date.includes("hour")),
+      "url",
+      each.URL,
+    );
 
-      /* Todo 
-      
-      */
-    } else {
-      global.SCRAPED_DATA.push(...results24Hours);
+    await sleep(getRandomInt(DELAY_BETWEEN_STEPS));
+
+    total24HoursResults.push(...results24Hours);
+    totalPastWeekResults.push(...resultsPastWeek);
+
+    await sleep(getRandomInt(DELAY_BETWEEN_24HOURS_AND_PAST_WEEK_FILTERS));
+    await incognito2.close();
+    await sleep(getRandomInt(DELAY_BETWEEN_24HOURS_AND_PAST_WEEK_FILTERS));
+
+    if (index >= list.length - 1) {
+      console.log("Completed!");
+      await exportAsExcelSheet(total24HoursResults, totalPastWeekResults);
     }
-    console.log(global.SCRAPED_DATA);
-
-    await page.close();
   }
 
   process.on("exit", function () {

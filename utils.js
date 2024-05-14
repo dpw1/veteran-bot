@@ -1,10 +1,6 @@
 const fs = require("fs-extra");
-const path = require("path");
-const { resolve } = require("path");
-const { Timer } = require("timer-node");
-const userAgent = require("user-agents");
-const copySync = require("fs-extra/lib/copy/copy-sync");
 const Database = require("easy-json-database");
+const ExcelJS = require("exceljs");
 
 const csv = require("csv-parser");
 
@@ -25,7 +21,7 @@ function getCompanyNamesFromCSVFile(csvFilePath = `./company_urls.csv`) {
     fs.createReadStream(csvFilePath)
       .pipe(csv())
       .on("data", (data) => {
-        results.push(data.company);
+        results.push(data);
       })
       .on("end", () => {
         resolve(results);
@@ -34,6 +30,18 @@ function getCompanyNamesFromCSVFile(csvFilePath = `./company_urls.csv`) {
         reject(error);
       });
   });
+}
+
+function addPropertyToAllItems(arrayOfObjects, key, value) {
+  if (arrayOfObjects.length === 0) {
+    return arrayOfObjects;
+  }
+
+  arrayOfObjects.forEach((obj) => {
+    obj[key] = value;
+  });
+
+  return arrayOfObjects;
 }
 
 async function geminiQuestion(
@@ -57,7 +65,7 @@ async function geminiQuestion(
 
 /* Generates URL to search for company with included filter.
 
-The filter for past 24 hours has an ID. 
+The filter for past 24 hours has an ID.
 
 */
 async function createURLAsLocalStorage(page) {
@@ -141,73 +149,73 @@ async function goToJobsPage(page) {
   });
 }
 
-async function setFilter(page) {
-  console.log(`Setting filter..`);
-  return new Promise(async (resolve, reject) => {
-    const variables = { ...linkedinCSSSelectors };
+// async function setFilter(page) {
+//   console.log(`Setting filter..`);
+//   return new Promise(async (resolve, reject) => {
+//     const variables = { ...linkedinCSSSelectors };
 
-    const response = await page.evaluate((variables = variables) => {
-      return new Promise(async (resolve, reject) => {
-        function getRandomInteger(min, max) {
-          return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
+//     const response = await page.evaluate((variables = variables) => {
+//       return new Promise(async (resolve, reject) => {
+//         function getRandomInteger(min, max) {
+//           return Math.floor(Math.random() * (max - min + 1)) + min;
+//         }
 
-        function sleep(ms) {
-          return new Promise((resolve) => setTimeout(resolve, ms));
-        }
+//         function sleep(ms) {
+//           return new Promise((resolve) => setTimeout(resolve, ms));
+//         }
 
-        var found24Hours = false;
-        var $el = document.querySelector(variables.dateFilterButton);
+//         var found24Hours = false;
+//         var $el = document.querySelector(variables.dateFilterButton);
 
-        if (!$el) {
-          alert(`Error: unable to find date filter button`);
-        }
+//         if (!$el) {
+//           alert(`Error: unable to find date filter button`);
+//         }
 
-        var $filters = document.querySelectorAll(
-          variables.dateFilterButtonRadioButtons,
-        );
+//         var $filters = document.querySelectorAll(
+//           variables.dateFilterButtonRadioButtons,
+//         );
 
-        if (!$filters) {
-          alert(`Error: unable to find date filter options.`);
-        }
+//         if (!$filters) {
+//           alert(`Error: unable to find date filter options.`);
+//         }
 
-        $el.click();
-        await sleep(getRandomInteger(200, 400));
+//         $el.click();
+//         await sleep(getRandomInteger(200, 400));
 
-        for (var each of $filters) {
-          var text = each.textContent.toLowerCase().trim();
-          var $found = each.querySelector(`input`);
+//         for (var each of $filters) {
+//           var text = each.textContent.toLowerCase().trim();
+//           var $found = each.querySelector(`input`);
 
-          if (text.includes("24 hours")) {
-            $found.checked = true;
-            break;
-          } else if (text.includes("past week")) {
-            $found.checked = true;
-          }
-        }
+//           if (text.includes("24 hours")) {
+//             $found.checked = true;
+//             break;
+//           } else if (text.includes("past week")) {
+//             $found.checked = true;
+//           }
+//         }
 
-        await sleep(getRandomInteger(1500, 2000));
+//         await sleep(getRandomInteger(1500, 2000));
 
-        const $submit = document.querySelector(
-          variables.dateFilterSubmitButton,
-        );
+//         const $submit = document.querySelector(
+//           variables.dateFilterSubmitButton,
+//         );
 
-        if (!$submit) {
-          alert(`Error: submit button for the date filter not found.`);
-          throw new Error(
-            `Error: submit button for the date filter not found.`,
-          );
-        }
+//         if (!$submit) {
+//           alert(`Error: submit button for the date filter not found.`);
+//           throw new Error(
+//             `Error: submit button for the date filter not found.`,
+//           );
+//         }
 
-        $submit.click();
+//         $submit.click();
 
-        resolve();
-      });
-    }, variables);
+//         resolve();
+//       });
+//     }, variables);
 
-    resolve(response);
-  });
-}
+//     resolve(response);
+//   });
+// }
 
 async function searchForCompany(page, company) {
   console.log(`Searching for ${company}...`);
@@ -295,7 +303,7 @@ function replaceAll(word, obj) {
 }
 
 function extractResultsFromCompanyPage(page, company) {
-  console.log(`Searching past 24h...`);
+  console.log(`${company} - Searching past 24h...`);
 
   return new Promise(async (resolve, reject) => {
     const variables = { ...linkedinCSSSelectors, company };
@@ -307,7 +315,7 @@ function extractResultsFromCompanyPage(page, company) {
         );
 
         if ($404) {
-          resolve(null);
+          resolve([]);
           return;
         }
 
@@ -343,6 +351,93 @@ function extractResultsFromCompanyPage(page, company) {
   });
 }
 
+function getRandomInt(range) {
+  if (
+    !Array.isArray(range) ||
+    range.length !== 2 ||
+    typeof range[0] !== "number" ||
+    typeof range[1] !== "number"
+  ) {
+    throw new Error("Invalid input. Please provide an array of two numbers.");
+  }
+
+  const [num1, num2] = range;
+
+  if (num1 > num2) {
+    [num1, num2] = [num2, num1];
+  }
+
+  const min = Math.ceil(num1);
+  const max = Math.floor(num2);
+
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getCurrentDateTime() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+
+  // Get AM or PM based on the current hour
+  const AMorPM = now.getHours() >= 12 ? "PM" : "AM";
+
+  return `${year}-${month}-${day}__at__${hours}-${minutes}-${seconds} ${AMorPM}`;
+}
+
+function exportAsExcelSheet(past24HoursData, pastWeekData) {
+  return new Promise((resolve, reject) => {
+    // Create a new workbook
+    const workbook = new ExcelJS.Workbook();
+
+    console.log("data", past24HoursData);
+    // Add the first worksheet (tab) for "Past 24 hours" if data is provided
+    if (past24HoursData.length > 0) {
+      const past24HoursWorksheet = workbook.addWorksheet("Past 24 hours");
+      past24HoursWorksheet.columns = [
+        { header: "Title", key: "title" },
+        { header: "Company", key: "company" },
+        { header: "Location", key: "location" },
+        { header: "Date", key: "date" },
+        { header: "URL", key: "url" },
+      ];
+      past24HoursData.forEach((row) => {
+        past24HoursWorksheet.addRow(row);
+      });
+    }
+
+    // Add the second worksheet (tab) for "Past week" if data is provided
+    if (pastWeekData.length > 0) {
+      const pastWeekWorksheet = workbook.addWorksheet("Past week");
+      pastWeekWorksheet.columns = [
+        { header: "Title", key: "title" },
+        { header: "Company", key: "company" },
+        { header: "Location", key: "location" },
+        { header: "Date", key: "date" },
+        { header: "URL", key: "url" },
+      ];
+      pastWeekData.forEach((row) => {
+        pastWeekWorksheet.addRow(row);
+      });
+    }
+
+    // Save the workbook as an XLSX file
+    workbook.xlsx
+      .writeFile(`jobs__${getCurrentDateTime()}.xlsx`)
+      .then(() => {
+        console.log("XLSX file with two tabs created successfully!");
+        resolve();
+      })
+      .catch((error) => {
+        console.error("Error creating XLSX file:", error);
+        reject(error);
+      });
+  });
+}
+
 module.exports = {
   replaceAll: replaceAll,
   searchForCompany: searchForCompany,
@@ -351,8 +446,10 @@ module.exports = {
   geminiQuestion: geminiQuestion,
   getCompanyNamesFromCSVFile: getCompanyNamesFromCSVFile,
   goToJobsPage: goToJobsPage,
-  setFilter: setFilter,
   createURLAsLocalStorage: createURLAsLocalStorage,
   sleep: sleep,
+  getRandomInt: getRandomInt,
   extractResultsFromCompanyPage: extractResultsFromCompanyPage,
+  exportAsExcelSheet: exportAsExcelSheet,
+  addPropertyToAllItems: addPropertyToAllItems,
 };
