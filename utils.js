@@ -117,10 +117,6 @@ function sleep(time) {
   });
 }
 
-async function cleanCompanyName(list) {
-  return new Promise(async (resolve, reject) => {});
-}
-
 async function goToJobsPage(page) {
   return new Promise(async (resolve, reject) => {
     await page.goto(`https://linkedin.com/`, {
@@ -148,74 +144,6 @@ async function goToJobsPage(page) {
     resolve(response);
   });
 }
-
-// async function setFilter(page) {
-//   console.log(`Setting filter..`);
-//   return new Promise(async (resolve, reject) => {
-//     const variables = { ...linkedinCSSSelectors };
-
-//     const response = await page.evaluate((variables = variables) => {
-//       return new Promise(async (resolve, reject) => {
-//         function getRandomInteger(min, max) {
-//           return Math.floor(Math.random() * (max - min + 1)) + min;
-//         }
-
-//         function sleep(ms) {
-//           return new Promise((resolve) => setTimeout(resolve, ms));
-//         }
-
-//         var found24Hours = false;
-//         var $el = document.querySelector(variables.dateFilterButton);
-
-//         if (!$el) {
-//           alert(`Error: unable to find date filter button`);
-//         }
-
-//         var $filters = document.querySelectorAll(
-//           variables.dateFilterButtonRadioButtons,
-//         );
-
-//         if (!$filters) {
-//           alert(`Error: unable to find date filter options.`);
-//         }
-
-//         $el.click();
-//         await sleep(getRandomInteger(200, 400));
-
-//         for (var each of $filters) {
-//           var text = each.textContent.toLowerCase().trim();
-//           var $found = each.querySelector(`input`);
-
-//           if (text.includes("24 hours")) {
-//             $found.checked = true;
-//             break;
-//           } else if (text.includes("past week")) {
-//             $found.checked = true;
-//           }
-//         }
-
-//         await sleep(getRandomInteger(1500, 2000));
-
-//         const $submit = document.querySelector(
-//           variables.dateFilterSubmitButton,
-//         );
-
-//         if (!$submit) {
-//           alert(`Error: submit button for the date filter not found.`);
-//           throw new Error(
-//             `Error: submit button for the date filter not found.`,
-//           );
-//         }
-
-//         $submit.click();
-
-//         resolve();
-//       });
-//     }, variables);
-
-//     resolve(response);
-//   });
-// }
 
 async function searchForCompany(page, company) {
   console.log(`Searching for ${company}...`);
@@ -247,8 +175,6 @@ async function searchForCompany(page, company) {
     resolve(response);
   });
 }
-
-async function resetPageIfSearchIsBlocked() {}
 
 async function saveToDatabase(data = null) {
   return new Promise(async (resolve, reject) => {
