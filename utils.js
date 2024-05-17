@@ -229,7 +229,7 @@ function replaceAll(word, obj) {
 }
 
 function extractResultsFromCompanyPage(page, company) {
-  console.log(`${company} - Searching past 24h...`);
+  console.log(`${company} - Searching...`);
 
   return new Promise(async (resolve, reject) => {
     const variables = { ...linkedinCSSSelectors, company };
@@ -256,15 +256,21 @@ function extractResultsFromCompanyPage(page, company) {
           const $date = each.querySelector(
             `[class*='job-search-card__listdate']`,
           );
+          const $link = each.querySelector(
+            `.jobs-search__results-list > li a[class*='link'][class*='card']`,
+          );
 
           const title = $title.textContent.trim();
           const location = $location.textContent.trim();
           const date = $date.textContent.trim();
+          var link = $link.href;
+          link = link.includes("?") ? link.split("?")[0] : link;
 
           window.results.push({
             title,
             location,
             date,
+            link,
             company: variables.company,
           });
         }
@@ -328,6 +334,7 @@ function exportAsExcelSheet(past24HoursData, pastWeekData) {
         { header: "Company", key: "company" },
         { header: "Location", key: "location" },
         { header: "Date", key: "date" },
+        { header: "Job link", key: "link" },
         { header: "URL", key: "url" },
       ];
       past24HoursData.forEach((row) => {
@@ -343,6 +350,7 @@ function exportAsExcelSheet(past24HoursData, pastWeekData) {
         { header: "Company", key: "company" },
         { header: "Location", key: "location" },
         { header: "Date", key: "date" },
+        { header: "Job link", key: "link" },
         { header: "URL", key: "url" },
       ];
       pastWeekData.forEach((row) => {
