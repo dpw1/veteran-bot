@@ -360,7 +360,7 @@ function exportAsExcelSheet(past24HoursData, pastWeekData) {
 
     // Save the workbook as an XLSX file
     workbook.xlsx
-      .writeFile(`jobs__${getCurrentDateTime()}.xlsx`)
+      .writeFile(`./results/jobs__${getCurrentDateTime()}.xlsx`)
       .then(() => {
         console.log("XLSX file with two tabs created successfully!");
         resolve();
