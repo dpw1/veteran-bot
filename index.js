@@ -17,6 +17,7 @@ const {
   getRandomInt,
   exportAsExcelSheet,
   addPropertyToAllItems,
+  shuffleArray,
 } = require("./utils");
 
 const timer = new Timer({ label: "timer" });
@@ -26,7 +27,10 @@ let emailSuccess = 0;
 let emailTotal = 0;
 
 (async () => {
-  const list = await getCompanyNamesFromCSVFile();
+  const _list = await getCompanyNamesFromCSVFile();
+  const list = shuffleArray(_list);
+
+  console.log(_list, list);
 
   puppeteer.use(StealthPlugin());
 

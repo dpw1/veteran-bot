@@ -14,6 +14,10 @@ const linkedinCSSSelectors = {
   dateFilterSubmitButton: `[aria-label*="Date posted"] + * .filter__submit-button`,
 };
 
+function shuffleArray(array) {
+  const copy = JSON.parse(JSON.stringify(array));
+  return copy.sort(() => Math.random() - 0.5);
+}
 function getCompanyNamesFromCSVFile(csvFilePath = `./company_urls.csv`) {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -385,5 +389,6 @@ module.exports = {
   getRandomInt: getRandomInt,
   extractResultsFromCompanyPage: extractResultsFromCompanyPage,
   exportAsExcelSheet: exportAsExcelSheet,
+  shuffleArray: shuffleArray,
   addPropertyToAllItems: addPropertyToAllItems,
 };
